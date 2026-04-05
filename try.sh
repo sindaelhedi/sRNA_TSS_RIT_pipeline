@@ -1,15 +1,3 @@
- Prerequisites:                                                  
- 
-✓ sRNA-Detect (outputs: organism_dir/srna.gtf)
-✓ TSSAR (outputs: organism_dir/tss.bed)
-✓ RNIE (executables: /opt/RNIE/rnie.pl)
-✓ RNIE models (files: /opt/RNIE/models/erpin-rho.cm)
-✓ BEDTools 
-✓ BLAST+ 
-✓ SAMtools 
-✓ Perl 
-
-
 # ============================================================
 # CONFIG
 # ============================================================
@@ -276,64 +264,5 @@ done
 echo "========== ALL DONE =========="
 
 
-
-
-USAGE: bash script.sh <BASE_DIR> <OUTPUT_ROOT>  
-ARGUMENTS:
-  BASE_DIR      Directory containing organism subdirectories
-  OUTPUT_ROOT   Output results directory
-  
-STRUCTURE:
-  BASE_DIR/
-  ├── organism1/
-  │   ├── genome.fa
-  │   ├── tss.bed
-  │   ├── srna.gtf
-  │   └── blast_db/ (with .nin, .nhr, .nsq files)
-  └── organism2/
-      ├── genome.fa
-      ├── tss.bed
-      ├── srna.gtf
-      └── blast_db/
-
-
-RÉSULTATS
- 
- 
-/path/to/results/
-├── E_coli/
-│   ├── summary.tsv                    ←  PRINCIPAL RESULT
-│   ├── bed/
-│   │   ├── srna_0.bed, srna_10.bed, ... (sRNA by score)
-│   │   └── tss_0.bed, tss_10.bed, ...   (TSS by score)
-│   ├── intersects/
-│   │   └── 0_0.bed, 0_10.bed, ...      (Intersections sRNA ∩ TSS)
-│   ├── fasta/
-│   │   └── 0_0.fa, 0_10.fa, ...          (extended sRNA sequences )
-│   ├── blast/
-│   │   └── 0_0.blast, 0_10.blast, ...  (matched sRNA to databases)
-│   └── rnie/
-│       ├── 0_0.bed, 0_10.bed, ...      (sRNA+TSS + terminators)
-│       └── 0_0_distinct.bed, ...
-│
-├── M_extorquens/
-│   ├── summary.tsv
-│   └── (same structure)
-│
-└── (other organisms...)
- 
-═══════════════════════════════════════════════════════════════════
- 
- summary.tsv
- 
-Colomns :
-  score_srna          = score of sRNA
-  nbr_srna            = Number of sRNA candidates (sRNA-Detect)
-  score_tss           = score of sRNA
-  nbr_tss             = Number of sRNA candidates (TSSAR)
-  intersection_count  = sRNA ∩ TSS 
-  blast_hits          = Validated sRNA by BLAST 
-  rit_count           = sRNA ∩ TSS ∩ RIT
-  blast_rit           = Validated final sRNA by BLAST
 
 
