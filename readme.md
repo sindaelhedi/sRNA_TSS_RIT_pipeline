@@ -27,7 +27,7 @@ This multi-layer approach significantly reduces transcriptomic noise while enric
 
 ---
 
-## 📥 Input
+##  Input
 
 - **Genome sequence** (FASTA)
 - **TSS predictions** (BED, from TSSAR)
