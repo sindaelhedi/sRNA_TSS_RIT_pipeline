@@ -71,9 +71,8 @@ samtools --version
 perl -v
 
 ###Install RNIE 
-```bash
 git clone https://github.com/rnie/rnie.git
 cd  rnie
 
-```bash 
+USAGE
 bash pipeline.sh <BASE_DIR> <OUTPUT_ROOT>
