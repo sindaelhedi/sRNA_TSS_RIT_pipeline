@@ -58,21 +58,21 @@ This multi-layer approach significantly reduces transcriptomic noise while enric
 
 ---
 
-###  Quick Setup
+### Pipeline usage
 
 ```bash
 git clone https://github.com/sindalehedi/sRNA-discovery-pipeline.git
-cd sRNA-discovery-pipeline
 
-# Check installations
-bedtools --version
-blastn -version
-samtools --version
-perl -v
+##Install sRNA-Detect
+git clone https://github.com/BioinformaticsLabAtMUN/sRNA-Detect.git
 
-###Install RNIE 
-git clone https://github.com/rnie/rnie.git
-cd  rnie
+##TSSAR
+wget http://nibiru.tbi.univie.ac.at/TSSAR/download
 
+##Install RNIE 
+git clone https://github.com/ppgardne/RNIE.git
+
+
+```bash
 USAGE
 bash pipeline.sh <BASE_DIR> <OUTPUT_ROOT>
