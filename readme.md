@@ -1,10 +1,10 @@
-# 🧬 sRNA Discovery Pipeline
+#  sRNA Discovery Pipeline
 
 A comprehensive, generalizable bioinformatic pipeline for systematic discovery and validation of small regulatory RNAs (sRNAs) in bacterial genomes.
 
 ---
 
-## 📌 Overview
+##  Overview
 
 This pipeline implements a sequential filtering strategy for bacterial sRNA discovery by integrating three independent biological constraints:
 
@@ -16,7 +16,7 @@ This multi-layer approach significantly reduces transcriptomic noise while enric
 
 ---
 
-## ⚙️ Features
+##  Features
 
 - Multi-step biological filtering (TSS + RIT + expression)
 - Adaptable to diverse bacterial species
@@ -36,7 +36,7 @@ This multi-layer approach significantly reduces transcriptomic noise while enric
 
 ---
 
-## 📤 Output
+##  Output
 
 - **Summary table (TSV)**: candidate metrics across score combinations  
 - **Filtered BED files**: sRNA, TSS, intersections  
@@ -46,7 +46,7 @@ This multi-layer approach significantly reduces transcriptomic noise while enric
 
 ---
 
-## 🛠️ Installation
+##  Installation
 
 ### Prerequisites
 
@@ -58,7 +58,7 @@ This multi-layer approach significantly reduces transcriptomic noise while enric
 
 ---
 
-### 🚀 Quick Setup
+###  Quick Setup
 
 ```bash
 git clone https://github.com/sindalehedi/sRNA-discovery-pipeline.git
