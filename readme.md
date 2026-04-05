@@ -72,7 +72,6 @@ wget http://nibiru.tbi.univie.ac.at/TSSAR/download
 ##Install RNIE 
 git clone https://github.com/ppgardne/RNIE.git
 
-
+### USAGE
 ```bash
-USAGE
 bash pipeline.sh <BASE_DIR> <OUTPUT_ROOT>
