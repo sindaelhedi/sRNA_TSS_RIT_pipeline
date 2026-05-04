@@ -39,6 +39,19 @@ extend_downstream() {
     }' "$1" > "$2"
 }
 
+# ============================================================
+# CONVERT SPACES TO TABS IN BED FILE
+# ============================================================
+# bedtools requires TAB-separated files, not spaces
+
+fix_bed_format() {
+    local bed="$1"
+    local output="$2"
+    
+    # Convert multiple spaces/whitespace to tabs
+    sed 's/[[:space:]]\+/\t/g' "$bed" > "$output"
+}
+
 run_blast() {
     local fasta="$1"
     local out="$2"
@@ -48,20 +61,30 @@ run_blast() {
     [[ ! -s "$fasta" ]] && { > "$out"; return; }
 
     local tmp="${out}.raw"
+    local seq_count=$(grep -c '^>' "$fasta" 2>/dev/null || echo 0)
+    echo "[BLAST] Input: $seq_count sequences from $(basename "$fasta")" >&2
 
-    # Step 1: full BLAST output (stable)
     blastn -task blastn-short \
         -query "$fasta" \
         -db "$db" \
         -outfmt 6 \
         -num_threads "$NCPUS" \
+        -evalue 1e-1 \
+        -perc_identity 95 \
         > "$tmp" 2>/dev/null || true
 
-    # Step 2: apply filtering AFTER
-    awk '!seen1[$1]++ && !seen2[$2]++' "$tmp" > "$out"
+    local raw_count=$(wc -l < "$tmp" 2>/dev/null || echo 0)
+    echo "[BLAST] Raw hits: $raw_count" >&2
+
+    # CORRECT FILTERING: Keep only first hit per query sequence
+    awk '!seen[$1]++' "$tmp" > "$out"
+    
+    local filtered_count=$(wc -l < "$out" 2>/dev/null || echo 0)
+    echo "[BLAST] After filtering: $filtered_count" >&2
 
     rm -f "$tmp"
 }
+
 run_rnie() {
     local fasta="$1"
     local outdir="$2"
@@ -86,7 +109,10 @@ process_rnie() {
     | awk 'BEGIN{OFS="\t"}{
         split($1,a,"::")
         split(a[1],b,":")
-        chr=b[1]; start=b[2]; end=b[3]; strand=b[4]
+        chr=b[1]
+        start=b[2]
+        end=b[3]
+        strand=b[4]
 
         split(a[2],c,":|-|\\(|\\)")
         ext_start=c[2]
@@ -94,10 +120,25 @@ process_rnie() {
         term_start=ext_start + $4 - 1
         term_end=ext_start + $5 - 1
 
-        if (strand=="+") {final_start=start; final_end=term_end}
-        else {final_start=term_start; final_end=end}
+        if (strand=="+") {
+            final_start=start
+            final_end=term_end
+        } else {
+            final_start=term_start
+            final_end=end
+        }
 
-        print chr,final_start,final_end,".",$6,strand
+        key = chr ":" start ":" end ":" strand
+
+        if (!(key in best_score) || $6 > best_score[key]) {
+            best_score[key] = $6
+            best_data[key] = chr "\t" final_start "\t" final_end "\t.\t" $6 "\t" $7
+        }
+    }
+    END {
+        for (k in best_data) {
+            print best_data[k]
+        }
     }' > "$out_bed"
 }
 
@@ -115,58 +156,85 @@ full_analysis() {
 
     mkdir -p "$results"/{fasta,blast,rnie}
 
-    local ext_bed="$results/fasta/${tag}_ext.bed"
-    local fasta="$results/fasta/${tag}.fa"
+    local bed_count=$(wc -l < "$bed")
+    echo "[ANALYSIS] Processing ${tag}: ${bed_count} intersected sRNAs" >&2
 
+    # ========================
+    # FIX BED FORMAT (spaces → tabs)
+    # ========================
+    
+    local bed_fixed="$results/fasta/${tag}_fixed.bed"
+    fix_bed_format "$bed" "$bed_fixed"
+    
+    local fixed_count=$(wc -l < "$bed_fixed")
+    echo "[ANALYSIS] Fixed BED format: ${fixed_count} lines" >&2
+
+    # ========================
+    # PART 1: BLAST ANALYSIS
+    # ========================
+    # BLAST should use ORIGINAL sRNA sequences (not extended)
+    
+    local fasta="$results/fasta/${tag}.fa"
+    
+    # Extract FASTA directly from FIXED intersected BED
+    bedtools getfasta -fi "$genome" -bed "$bed_fixed" -s -name -fo "$fasta" 2>/dev/null || true
+
+    local extracted_count=$(grep -c '^>' "$fasta" 2>/dev/null || echo 0)
+    echo "[ANALYSIS] Extracted original FASTA: ${extracted_count} sequences" >&2
+
+    # BLAST the original sRNA sequences
+    local blast_out="$results/blast/${tag}.blast"
+    run_blast "$fasta" "$blast_out" "$db"
+
+    # ========================
+    # PART 2: RNIE ANALYSIS
+    # ========================
+    # RNIE needs to find TERMINATORS downstream
+    
+    local ext_bed="$results/fasta/${tag}_ext.bed"
+    local ext_fasta="$results/fasta/${tag}_ext.fa"
+    
+    # Extend coordinates for terminator search
+    extend_downstream "$bed_fixed" "$ext_bed"
+    
+    # Extract extended FASTA (includes downstream region)
+    bedtools getfasta -fi "$genome" -bed "$ext_bed" -s -name -fo "$ext_fasta" 2>/dev/null || true
+
+    local ext_extracted=$(grep -c '^>' "$ext_fasta" 2>/dev/null || echo 0)
+    echo "[ANALYSIS] Extracted extended FASTA: ${ext_extracted} sequences" >&2
+
+    # Run RNIE on extended sequences to find terminators
     local rnie_dir="$results/rnie/${tag}"
+    run_rnie "$ext_fasta" "$rnie_dir"
+
     local rnie_bed="$results/rnie/${tag}.bed"
+    local gff=$(find "$rnie_dir" -name "*rnie.gff" | head -1 || true)
+    process_rnie "$gff" "$rnie_bed"
+
+    # ========================
+    # PART 3: RNIE VALIDATION
+    # ========================
+    
     local sorted_bed="$results/rnie/${tag}_sorted.bed"
     local distinct_bed="$results/rnie/${tag}_distinct.bed"
     local distinct_fasta="$results/rnie/${tag}_distinct.fa"
-
-    local blast_out="$results/blast/${tag}.blast"
     local blast_rnie_out="$results/blast/${tag}_rnie.blast"
 
-    # ------------------------
-    # FASTA
-    # ------------------------
-    extend_downstream "$bed" "$ext_bed"
-
-    bedtools getfasta -fi "$genome" -bed "$ext_bed" -s -name \
-        -fo "$fasta" 2>/dev/null || true
-
-    run_blast "$fasta" "$blast_out" "$db"
-
-    # ------------------------
-    # RNIE
-    # ------------------------
-    run_rnie "$fasta" "$rnie_dir"
-
-    gff=$(find "$rnie_dir" -name "*rnie.gff" | head -1 || true)
-    process_rnie "$gff" "$rnie_bed"
-
-    # ------------------------
-    # MERGE RNIE (CRITICAL FIX)
-    # ------------------------
     if [[ -s "$rnie_bed" ]]; then
-
         bedtools sort -i "$rnie_bed" > "$sorted_bed"
-
-        bedtools merge -s -d 2 -i "$sorted_bed" -c 6 -o distinct \
-            > "$distinct_bed"
-
-        bedtools getfasta -fi "$genome" -bed "$distinct_bed" \
-            -fo "$distinct_fasta" 2>/dev/null || true
-
+        bedtools merge -s -d 2 -i "$sorted_bed" -c 6 -o distinct > "$distinct_bed"
+        bedtools getfasta -fi "$genome" -bed "$distinct_bed" -fo "$distinct_fasta" 2>/dev/null || true
+        
+        # BLAST the RNIE-derived sequences
         run_blast "$distinct_fasta" "$blast_rnie_out" "$db"
     fi
 
-    # ------------------------
-    # COUNTS
-    # ------------------------
-    blast_n=0
-    rit_count=0
-    blast_rit=0
+    # ========================
+    # RETURN COUNTS
+    # ========================
+    local blast_n=0
+    local rit_count=0
+    local blast_rit=0
 
     [[ -s "$blast_out" ]] && blast_n=$(wc -l < "$blast_out")
     [[ -s "$distinct_bed" ]] && rit_count=$(wc -l < "$distinct_bed")
@@ -206,9 +274,9 @@ for ORG_DIR in "$BASE_DIR"/*; do
     summary="$RESULTS/summary.tsv"
     echo -e "score_srna\tnbr_srna\tscore_tss\tnbr_tss\tintersection_count\tblast_hits\trit_count\tblast_rit" > "$summary"
 
-    # ------------------------
-    # PREP
-    # ------------------------
+    # ========================
+    # PREP: Create BED files
+    # ========================
     for s in "${srna_scores[@]}"; do
         gtf_to_bed "$SRNA" "$RESULTS/bed/srna_$s.bed" "$s"
     done
@@ -218,9 +286,9 @@ for ORG_DIR in "$BASE_DIR"/*; do
         | sort -k1,1 -k2,2n > "$RESULTS/bed/tss_$t.bed"
     done
 
-    # ------------------------
-    # MAIN LOOP
-    # ------------------------
+    # ========================
+    # MAIN SCORING LOOP
+    # ========================
     for s in "${srna_scores[@]}"; do
 
         srna_bed="$RESULTS/bed/srna_$s.bed"
@@ -262,6 +330,7 @@ for ORG_DIR in "$BASE_DIR"/*; do
 done
 
 echo "========== ALL DONE =========="
+
 
 
 
